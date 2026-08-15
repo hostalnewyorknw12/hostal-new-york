@@ -313,6 +313,29 @@ body::before{
   .logo-img{height:36px}
   .main{padding:16px 12px 40px}
 }
+
+/* ===== INVENTARIO TAB ===== */
+.tabs{display:flex;gap:8px;padding:0 20px;margin-bottom:12px}
+.tab-btn{flex:1;padding:12px;border-radius:12px;border:1px solid var(--glass-border);background:var(--glass-bg);backdrop-filter:var(--blur);color:var(--muted);font-weight:600;cursor:pointer;text-align:center;transition:.2s;user-select:none}
+.tab-btn.active{background:rgba(212,172,110,0.15);border-color:var(--gold);color:var(--gold)}
+.inv-cats{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px;margin-bottom:16px}
+.inv-cat-btn{padding:8px 14px;border-radius:20px;border:1px solid var(--glass-border);background:var(--glass-bg);color:var(--muted);font-size:13px;cursor:pointer;user-select:none}
+.inv-cat-btn.active{background:rgba(212,172,110,0.15);border-color:var(--gold);color:var(--gold)}
+.inv-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:0 20px;margin-bottom:16px}
+.inv-metric{background:var(--glass-bg);border:1px solid var(--glass-border);backdrop-filter:var(--blur);border-radius:14px;padding:14px}
+.inv-metric-label{font-size:12px;color:var(--muted);margin-bottom:4px}
+.inv-metric-value{font-size:20px;font-weight:700;color:var(--text)}
+.inv-list{padding:0 20px 20px;display:flex;flex-direction:column;gap:8px}
+.inv-row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;background:var(--glass-bg);border:1px solid var(--glass-border);backdrop-filter:var(--blur);border-radius:14px;padding:12px 16px}
+.inv-row.low{border-color:rgba(220,38,38,0.5)}
+.inv-name{font-weight:600;color:var(--text);font-size:14px}
+.inv-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.inv-meta.low{color:#FCA5A5}
+.inv-actions{display:flex;gap:6px;align-items:center}
+.inv-qty{width:50px;padding:6px;border-radius:8px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);text-align:center}
+.inv-btn{padding:6px 10px;border-radius:8px;border:1px solid var(--glass-border);background:rgba(255,255,255,0.05);color:var(--text);cursor:pointer;font-size:12px}
+.inv-btn.venta{border-color:rgba(220,38,38,0.5);color:#FCA5A5}
+.inv-btn.ingreso{border-color:rgba(16,185,129,0.5);color:#6EE7B7}
 </style>
 </head>
 <body>
@@ -336,6 +359,12 @@ body::before{
   </div>
 </header>
 
+<div class="tabs">
+  <div class="tab-btn active" id="tab-admin" onclick="switchTab('admin')">🏨 Administración</div>
+  <div class="tab-btn" id="tab-inv" onclick="switchTab('inventario')">📦 Inventario</div>
+</div>
+
+<div id="view-admin">
 <div class="summary-bar">
   <span class="s-pill s-libre" id="sum-libre">0 libres</span>
   <span class="s-pill s-ocup"  id="sum-ocup">0 ocupadas</span>
@@ -347,6 +376,17 @@ body::before{
   <div class="section-title">Habitaciones — estado actual</div>
   <div id="rooms-container"></div>
 </main>
+</div><!-- view-admin -->
+
+<div id="view-inventario" style="display:none">
+  <div class="inv-summary">
+    <div class="inv-metric"><div class="inv-metric-label">Stock bajo</div><div class="inv-metric-value" id="inv-bajo">0</div></div>
+    <div class="inv-metric"><div class="inv-metric-label">Vendido hoy</div><div class="inv-metric-value" id="inv-vendido">S/. 0.00</div></div>
+    <div class="inv-metric"><div class="inv-metric-label">Ganancia hoy</div><div class="inv-metric-value" id="inv-ganancia">S/. 0.00</div></div>
+  </div>
+  <div class="inv-cats" id="inv-cats"></div>
+  <div class="inv-list" id="inv-list"></div>
+</div>
 
 </div><!-- wrap -->
 
@@ -395,6 +435,72 @@ const EXTRAS_RAPIDOS = [
   {emoji:'🍫', nombre:'Dulces'},
   {emoji:'🍳', nombre:'Desayuno'},
 ];
+
+// ============================================================
+// INVENTARIO — pestaña separada, Sheet separado
+// ============================================================
+const INVENTORY_URL = "https://script.google.com/macros/s/AKfycbxR34-2HqohKgPcssJnYDusp_4WcJP9LxCP0Oxg4Q-bSrrGqBP-g3YDcuoz3gNjAftS/exec";
+let inventario = [];
+let invCatActiva = null;
+
+function switchTab(tab){
+  document.getElementById('view-admin').style.display = tab==='admin' ? '' : 'none';
+  document.getElementById('view-inventario').style.display = tab==='inventario' ? '' : 'none';
+  document.getElementById('tab-admin').classList.toggle('active', tab==='admin');
+  document.getElementById('tab-inv').classList.toggle('active', tab==='inventario');
+  if(tab==='inventario') cargarInventario();
+}
+
+async function cargarInventario(){
+  try{
+    const r = await fetch(INVENTORY_URL + '?accion=stock');
+    inventario = await r.json();
+    if(!invCatActiva && inventario.length) invCatActiva = inventario[0].categoria;
+    renderInventario();
+  }catch(e){ console.error('Error cargando inventario', e); }
+}
+
+function renderInventario(){
+  const cats = [...new Set(inventario.map(p=>p.categoria))];
+  const catsEl = document.getElementById('inv-cats');
+  catsEl.innerHTML = cats.map(c=>
+    `<div class="inv-cat-btn ${c===invCatActiva?'active':''}" onclick="invSetCat('${c}')">${c}</div>`
+  ).join('');
+
+  const listEl = document.getElementById('inv-list');
+  const productos = inventario.filter(p=>p.categoria===invCatActiva);
+  listEl.innerHTML = productos.map(p=>`
+    <div class="inv-row ${p.bajo?'low':''}">
+      <div>
+        <div class="inv-name">${p.producto}</div>
+        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}Stock: ${p.stock} · S/. ${Number(p.precio).toFixed(2)} c/u</div>
+      </div>
+      <div class="inv-actions">
+        <input class="inv-qty" type="number" min="1" value="1" id="qty-${p.producto}">
+        <button class="inv-btn ingreso" onclick="invMover('${p.producto}','ingreso')">+ Ingreso</button>
+        <button class="inv-btn venta" onclick="invMover('${p.producto}','venta')">− Venta</button>
+      </div>
+    </div>
+  `).join('');
+
+  document.getElementById('inv-bajo').textContent = inventario.filter(p=>p.bajo).length;
+}
+
+function invSetCat(c){ invCatActiva = c; renderInventario(); }
+
+async function invMover(producto, tipo){
+  const input = document.getElementById('qty-'+producto);
+  const cantidad = parseInt(input.value) || 0;
+  if(cantidad<=0) return;
+  try{
+    await fetch(INVENTORY_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({tipo, producto, cantidad})
+    });
+    setTimeout(cargarInventario, 800);
+  }catch(e){ console.error('Error registrando movimiento', e); }
+}
 
 let state = {};
 let modalTarget = null;
