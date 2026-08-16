@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -489,17 +490,23 @@ function renderInventario(){
   const listEl = document.getElementById('inv-list');
   const productos = inventario.filter(p=>p.categoria===invCatActiva);
   listEl.innerHTML = productos.map(p=>`
-    <div class="inv-row ${p.bajo?'low':''}">
-      <div>
-        <div class="inv-name">${p.producto}</div>
-        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}Vendidos: ${p.vendidos || 0}</div>
+    <div class="inv-row ${p.bajo?'low':''}" style="flex-direction:column;align-items:stretch;gap:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div>
+          <div class="inv-name">${p.producto}</div>
+          <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}Stock: ${p.stock} · Vendidos: ${p.vendidos || 0}</div>
+        </div>
+        <div class="inv-actions">
+          <input class="inv-qty" type="number" min="1" value="1" id="qty-${p.producto}" style="width:50px">
+          <button class="inv-btn ingreso" title="Registrar una venta: resta del stock y suma la ganancia del día" onclick="invVender('${p.producto}')">🛒 Vender</button>
+        </div>
       </div>
-      <div class="inv-actions">
+      <div class="inv-actions" style="border-top:0.5px solid var(--glass-border);padding-top:8px">
         <span style="font-size:12px;color:var(--muted)">S/.</span>
         <input class="inv-qty" type="number" step="0.01" min="0" value="${Number(p.precio).toFixed(2)}" id="precio-${p.producto}" style="width:60px">
         <span style="font-size:12px;color:var(--muted)">Stock</span>
         <input class="inv-qty" type="number" min="0" value="${p.stock}" id="stock-${p.producto}">
-        <button class="inv-btn ingreso" title="Guardar precio y stock" onclick="invGuardarProducto('${p.producto}')">💾</button>
+        <button class="inv-btn ingreso" title="Corregir precio y stock manualmente" onclick="invGuardarProducto('${p.producto}')">💾 Corregir</button>
         <button class="inv-btn venta" title="Eliminar producto" onclick="invEliminarProducto('${p.producto}')">🗑️</button>
       </div>
     </div>
@@ -512,6 +519,23 @@ function renderInventario(){
 function invSetCat(c){ invCatActiva = c; renderInventario(); }
 
 // Guarda el precio y el stock EXACTOS que se escriban (no suma ni resta)
+// Registra una VENTA real: resta del stock automáticamente y guarda
+// el monto + la ganancia del día en el Excel (usa el costo guardado
+// ahí, aunque no se muestre en la página).
+async function invVender(producto){
+  const input = document.getElementById('qty-'+producto);
+  const cantidad = parseInt(input.value) || 0;
+  if(cantidad<=0) return;
+  try{
+    await fetch(INVENTORY_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({tipo:'venta', producto, cantidad})
+    });
+    setTimeout(cargarInventario, 800);
+  }catch(e){ console.error('Error registrando venta', e); }
+}
+
 async function invGuardarProducto(producto){
   const precioInput = document.getElementById('precio-'+producto);
   const stockInput = document.getElementById('stock-'+producto);
