@@ -379,10 +379,9 @@ body::before{
 </div><!-- view-admin -->
 
 <div id="view-inventario" style="display:none">
-  <div class="inv-summary">
+  <div class="inv-summary" style="grid-template-columns:repeat(2,1fr)">
     <div class="inv-metric"><div class="inv-metric-label">Stock bajo</div><div class="inv-metric-value" id="inv-bajo">0</div></div>
-    <div class="inv-metric"><div class="inv-metric-label">Vendido hoy</div><div class="inv-metric-value" id="inv-vendido">S/. 0.00</div></div>
-    <div class="inv-metric"><div class="inv-metric-label">Ganancia hoy</div><div class="inv-metric-value" id="inv-ganancia">S/. 0.00</div></div>
+    <div class="inv-metric"><div class="inv-metric-label">Total vendido</div><div class="inv-metric-value" id="inv-vendido">0 unid.</div></div>
   </div>
   <div style="padding:0 20px 12px">
     <button class="inv-btn ingreso" style="padding:10px 16px" onclick="invMostrarFormNuevo()">➕ Nuevo producto</button>
@@ -392,8 +391,7 @@ body::before{
       <input id="nv-nombre" placeholder="Nombre del producto (ej: Fanta)" />
       <input id="nv-categoria" placeholder="Categoría (ej: Gaseosas, Snacks, Cervezas...)" />
       <div style="display:flex;gap:8px">
-        <input id="nv-costo" type="number" step="0.01" placeholder="Costo S/." style="flex:1" />
-        <input id="nv-precio" type="number" step="0.01" placeholder="Precio venta S/." style="flex:1" />
+        <input id="nv-precio" type="number" step="0.01" placeholder="Precio de venta S/." style="flex:1" />
       </div>
       <div style="display:flex;gap:8px">
         <input id="nv-stock" type="number" placeholder="Stock inicial" style="flex:1" />
@@ -494,7 +492,7 @@ function renderInventario(){
     <div class="inv-row ${p.bajo?'low':''}">
       <div>
         <div class="inv-name">${p.producto}</div>
-        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}S/. ${Number(p.precio).toFixed(2)} c/u · costo S/. ${Number(p.costo).toFixed(2)}</div>
+        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}S/. ${Number(p.precio).toFixed(2)} c/u · Vendidos: ${p.vendidos || 0}</div>
       </div>
       <div class="inv-actions">
         <span style="font-size:12px;color:var(--muted)">Stock</span>
@@ -506,6 +504,7 @@ function renderInventario(){
   `).join('');
 
   document.getElementById('inv-bajo').textContent = inventario.filter(p=>p.bajo).length;
+  document.getElementById('inv-vendido').textContent = inventario.reduce((s,p)=>s+(p.vendidos||0),0) + ' unid.';
 }
 
 function invSetCat(c){ invCatActiva = c; renderInventario(); }
@@ -542,13 +541,13 @@ function invMostrarFormNuevo(){
 }
 function invCancelarNuevo(){
   document.getElementById('inv-form-nuevo').style.display = 'none';
-  ['nv-nombre','nv-categoria','nv-costo','nv-precio','nv-stock','nv-min'].forEach(id=>document.getElementById(id).value='');
+  ['nv-nombre','nv-categoria','nv-precio','nv-stock','nv-min'].forEach(id=>document.getElementById(id).value='');
 }
 
 async function invGuardarNuevo(){
   const producto   = document.getElementById('nv-nombre').value.trim();
   const categoria  = document.getElementById('nv-categoria').value.trim();
-  const costo      = parseFloat(document.getElementById('nv-costo').value) || 0;
+  const costo      = 0; // ya no se pide el costo de compra
   const precio     = parseFloat(document.getElementById('nv-precio').value) || 0;
   const stock      = parseInt(document.getElementById('nv-stock').value) || 0;
   const stockMinimo= parseInt(document.getElementById('nv-min').value) || 5;
