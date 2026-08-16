@@ -458,7 +458,7 @@ const EXTRAS_RAPIDOS = [
 // ============================================================
 // INVENTARIO — pestaña separada, Sheet separado
 // ============================================================
-const INVENTORY_URL = "https://script.google.com/macros/s/AKfycbxR34-2HqohKgPcssJnYDusp_4WcJP9LxCP0Oxg4Q-bSrrGqBP-g3YDcuoz3gNjAftS/exec";
+const INVENTORY_URL = "https://script.google.com/macros/s/AKfycbw5j6ycZ5tNqXk4SxgOA_RddKJm15EeyxsHhtROAjGzfeJPwM2uVohkLcziKDMsnOvb/exec";
 let inventario = [];
 let invCatActiva = null;
 
@@ -492,12 +492,14 @@ function renderInventario(){
     <div class="inv-row ${p.bajo?'low':''}">
       <div>
         <div class="inv-name">${p.producto}</div>
-        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}S/. ${Number(p.precio).toFixed(2)} c/u · Vendidos: ${p.vendidos || 0}</div>
+        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}Vendidos: ${p.vendidos || 0}</div>
       </div>
       <div class="inv-actions">
+        <span style="font-size:12px;color:var(--muted)">S/.</span>
+        <input class="inv-qty" type="number" step="0.01" min="0" value="${Number(p.precio).toFixed(2)}" id="precio-${p.producto}" style="width:60px">
         <span style="font-size:12px;color:var(--muted)">Stock</span>
         <input class="inv-qty" type="number" min="0" value="${p.stock}" id="stock-${p.producto}">
-        <button class="inv-btn ingreso" title="Guardar el número exacto de stock" onclick="invEditarStock('${p.producto}')">💾</button>
+        <button class="inv-btn ingreso" title="Guardar precio y stock" onclick="invGuardarProducto('${p.producto}')">💾</button>
         <button class="inv-btn venta" title="Eliminar producto" onclick="invEliminarProducto('${p.producto}')">🗑️</button>
       </div>
     </div>
@@ -509,19 +511,22 @@ function renderInventario(){
 
 function invSetCat(c){ invCatActiva = c; renderInventario(); }
 
-// Edita el stock de un producto al número EXACTO que se escriba (no suma ni resta)
-async function invEditarStock(producto){
-  const input = document.getElementById('stock-'+producto);
-  const stock = parseInt(input.value);
+// Guarda el precio y el stock EXACTOS que se escriban (no suma ni resta)
+async function invGuardarProducto(producto){
+  const precioInput = document.getElementById('precio-'+producto);
+  const stockInput = document.getElementById('stock-'+producto);
+  const precio = parseFloat(precioInput.value);
+  const stock = parseInt(stockInput.value);
+  if(isNaN(precio) || precio<0){ alert('Escribe un precio válido'); return; }
   if(isNaN(stock) || stock<0){ alert('Escribe un número de stock válido'); return; }
   try{
     await fetch(INVENTORY_URL, {
       method:'POST', mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({tipo:'editar_stock', producto, stock})
+      body: JSON.stringify({tipo:'editar_producto', producto, precio, stock})
     });
     setTimeout(cargarInventario, 800);
-  }catch(e){ console.error('Error editando stock', e); }
+  }catch(e){ console.error('Error guardando producto', e); }
 }
 
 async function invEliminarProducto(producto){
