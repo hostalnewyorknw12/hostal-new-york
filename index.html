@@ -384,6 +384,27 @@ body::before{
     <div class="inv-metric"><div class="inv-metric-label">Vendido hoy</div><div class="inv-metric-value" id="inv-vendido">S/. 0.00</div></div>
     <div class="inv-metric"><div class="inv-metric-label">Ganancia hoy</div><div class="inv-metric-value" id="inv-ganancia">S/. 0.00</div></div>
   </div>
+  <div style="padding:0 20px 12px">
+    <button class="inv-btn ingreso" style="padding:10px 16px" onclick="invMostrarFormNuevo()">➕ Nuevo producto</button>
+  </div>
+  <div id="inv-form-nuevo" style="display:none;padding:0 20px 16px">
+    <div style="background:var(--glass-bg);border:1px solid var(--glass-border);backdrop-filter:var(--blur);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px">
+      <input id="nv-nombre" placeholder="Nombre del producto (ej: Fanta)" />
+      <input id="nv-categoria" placeholder="Categoría (ej: Gaseosas, Snacks, Cervezas...)" />
+      <div style="display:flex;gap:8px">
+        <input id="nv-costo" type="number" step="0.01" placeholder="Costo S/." style="flex:1" />
+        <input id="nv-precio" type="number" step="0.01" placeholder="Precio venta S/." style="flex:1" />
+      </div>
+      <div style="display:flex;gap:8px">
+        <input id="nv-stock" type="number" placeholder="Stock inicial" style="flex:1" />
+        <input id="nv-min" type="number" placeholder="Stock mínimo (alerta)" style="flex:1" />
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="inv-btn" onclick="invCancelarNuevo()">Cancelar</button>
+        <button class="inv-btn ingreso" onclick="invGuardarNuevo()">Guardar producto</button>
+      </div>
+    </div>
+  </div>
   <div class="inv-cats" id="inv-cats"></div>
   <div class="inv-list" id="inv-list"></div>
 </div>
@@ -473,12 +494,13 @@ function renderInventario(){
     <div class="inv-row ${p.bajo?'low':''}">
       <div>
         <div class="inv-name">${p.producto}</div>
-        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}Stock: ${p.stock} · S/. ${Number(p.precio).toFixed(2)} c/u</div>
+        <div class="inv-meta ${p.bajo?'low':''}">${p.bajo?'⚠️ ':''}S/. ${Number(p.precio).toFixed(2)} c/u · costo S/. ${Number(p.costo).toFixed(2)}</div>
       </div>
       <div class="inv-actions">
-        <input class="inv-qty" type="number" min="1" value="1" id="qty-${p.producto}">
-        <button class="inv-btn ingreso" onclick="invMover('${p.producto}','ingreso')">+ Ingreso</button>
-        <button class="inv-btn venta" onclick="invMover('${p.producto}','venta')">− Venta</button>
+        <span style="font-size:12px;color:var(--muted)">Stock</span>
+        <input class="inv-qty" type="number" min="0" value="${p.stock}" id="stock-${p.producto}">
+        <button class="inv-btn ingreso" title="Guardar el número exacto de stock" onclick="invEditarStock('${p.producto}')">💾</button>
+        <button class="inv-btn venta" title="Eliminar producto" onclick="invEliminarProducto('${p.producto}')">🗑️</button>
       </div>
     </div>
   `).join('');
@@ -488,18 +510,61 @@ function renderInventario(){
 
 function invSetCat(c){ invCatActiva = c; renderInventario(); }
 
-async function invMover(producto, tipo){
-  const input = document.getElementById('qty-'+producto);
-  const cantidad = parseInt(input.value) || 0;
-  if(cantidad<=0) return;
+// Edita el stock de un producto al número EXACTO que se escriba (no suma ni resta)
+async function invEditarStock(producto){
+  const input = document.getElementById('stock-'+producto);
+  const stock = parseInt(input.value);
+  if(isNaN(stock) || stock<0){ alert('Escribe un número de stock válido'); return; }
   try{
     await fetch(INVENTORY_URL, {
       method:'POST', mode:'no-cors',
       headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify({tipo, producto, cantidad})
+      body: JSON.stringify({tipo:'editar_stock', producto, stock})
     });
     setTimeout(cargarInventario, 800);
-  }catch(e){ console.error('Error registrando movimiento', e); }
+  }catch(e){ console.error('Error editando stock', e); }
+}
+
+async function invEliminarProducto(producto){
+  if(!confirm(`¿Eliminar "${producto}" del inventario? Esto no borra el historial de movimientos, solo el producto de la lista.`)) return;
+  try{
+    await fetch(INVENTORY_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({tipo:'eliminar_producto', producto})
+    });
+    setTimeout(cargarInventario, 800);
+  }catch(e){ console.error('Error eliminando producto', e); }
+}
+
+function invMostrarFormNuevo(){
+  document.getElementById('inv-form-nuevo').style.display = '';
+}
+function invCancelarNuevo(){
+  document.getElementById('inv-form-nuevo').style.display = 'none';
+  ['nv-nombre','nv-categoria','nv-costo','nv-precio','nv-stock','nv-min'].forEach(id=>document.getElementById(id).value='');
+}
+
+async function invGuardarNuevo(){
+  const producto   = document.getElementById('nv-nombre').value.trim();
+  const categoria  = document.getElementById('nv-categoria').value.trim();
+  const costo      = parseFloat(document.getElementById('nv-costo').value) || 0;
+  const precio     = parseFloat(document.getElementById('nv-precio').value) || 0;
+  const stock      = parseInt(document.getElementById('nv-stock').value) || 0;
+  const stockMinimo= parseInt(document.getElementById('nv-min').value) || 5;
+
+  if(!producto || !categoria){ alert('Escribe al menos el nombre y la categoría'); return; }
+
+  try{
+    await fetch(INVENTORY_URL, {
+      method:'POST', mode:'no-cors',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({tipo:'nuevo_producto', producto, categoria, costo, precio, stock, stockMinimo})
+    });
+    invCancelarNuevo();
+    invCatActiva = categoria;
+    setTimeout(cargarInventario, 800);
+  }catch(e){ console.error('Error agregando producto', e); }
 }
 
 let state = {};
